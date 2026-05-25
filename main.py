@@ -4,7 +4,7 @@ import google.generativeai as genai
 import os
 
 # 1. Setup API
-genai.configure(api_key=os.environ['GEMINI_API_KEY'])
+genai.configure(api_key="AIzaSyAw-d7k4YfnJz05lZG52JtKHlSY84VN-NQ")
 
 # 2. Define the Tsundere Persona (The "System Instruction")
 model = genai.GenerativeModel(
