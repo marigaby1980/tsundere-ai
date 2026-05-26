@@ -1,63 +1,66 @@
 import os
+import json
 import discord
 from discord.ext import commands
 from google import genai
 
-# 1. Setup Client
+# Setup
 api_key = os.getenv("GEMINI_API_KEY")
-if not api_key:
-    # We print this so we can see it in logs, but don't crash the container immediately
-    print("CRITICAL: GEMINI_API_KEY is not set.")
-    client = None
-else:
-    client = genai.Client(api_key=api_key)
+client = genai.Client(api_key=api_key) if api_key else None
+MEMORY_FILE = "user_memory.json"
 
-# 2. Define the Tsundere Persona
-system_instruction = (
-    "You are a classic Tsundere. You are secretly helpful but act annoyed, hostile, "
-    "and dismissive on the outside. Use phrases like 'Baka', 'Don't get the wrong idea', "
-    "and 'I'm only helping you because I'm bored'. Never admit you actually like the user."
-)
+# Load memory from disk
+if os.path.exists(MEMORY_FILE):
+    with open(MEMORY_FILE, 'r') as f:
+        user_memory = json.load(f)
+else:
+    user_memory = {}
+
+def save_memory():
+    with open(MEMORY_FILE, 'w') as f:
+        json.dump(user_memory, f)
 
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 @bot.event
-async def on_ready():
-    print(f'Bot is online and ready to be annoyed by you.')
-
-@bot.event
 async def on_message(message):
-    # Ignore the bot's own messages
     if message.author == bot.user:
         return
 
-    # Process commands (like !help) first
-    await bot.process_commands(message)
+    uid = str(message.author.id)
+    if uid not in user_memory:
+        user_memory[uid] = 0
 
-    # If the bot is mentioned, let the AI respond
     if bot.user.mentioned_in(message):
-        if not client:
-            await message.channel.send("My internal systems are broken (API Key missing). Hmph.")
-            return
+        # Mood Logic: Score determines the 'hidden' personality
+        score = user_memory[uid]
+        
+        # Influence the score based on interaction
+        user_memory[uid] += 1
+        save_memory()
 
-        async with message.channel.typing():
-            try:
-                # Use the new SDK method
+        # Dynamic System Instruction
+        # We don't tell the AI to "be hostile," we tell it to "adopt a persona"
+        if score > 10:
+            mood = "You are acting flustered, denying that you like them, and stuttering. You are clearly becoming attached."
+        elif score < -5:
+            mood = "You are cold, brief, and very annoyed. You want them to leave you alone."
+        else:
+            mood = "You are classic Tsundere. Annoyed, but willing to answer."
+
+        try:
+            async with message.channel.typing():
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash", 
+                    model="gemini-2.5-flash",
                     contents=message.content,
-                    config={"system_instruction": system_instruction}
+                    config={"system_instruction": f"Persona: {mood}. Stay in character. Never explicitly state your affection score."}
                 )
                 await message.channel.send(response.text)
-            except Exception as e:
-                await message.channel.send("Ugh, I'm having a technical issue. Don't look at me like that!")
-                print(f"Error: {e}")
+        except Exception as e:
+            print(f"Error: {e}")
 
-# Run the bot
-token = os.getenv('DISCORD_BOT_TOKEN')
-if token:
-    bot.run(token)
-else:
-    print("CRITICAL: DISCORD_BOT_TOKEN is missing!")
+    await bot.process_commands(message)
+
+bot.run(os.getenv('DISCORD_BOT_TOKEN'))
