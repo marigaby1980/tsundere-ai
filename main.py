@@ -53,7 +53,7 @@ async def on_message(message):
         try:
             async with message.channel.typing():
                 response = client.models.generate_content(
-                    model="gemini-2.0-flash",
+                    model="gemini-1.5-flash-8b",
                     contents=message.content,
                     config={"system_instruction": f"Persona: {mood}. Stay in character. Never explicitly state your affection score."}
                 )
