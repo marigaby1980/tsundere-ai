@@ -1,15 +1,20 @@
+import os
 import discord
 from discord.ext import commands
-import google.generativeai as genai
-import os
+from google import genai # Use the new library
 
-# 1. Setup API
-genai.configure(api_key="AIzaSyAw-d7k4YfnJz05lZG52JtKHlSY84VN-NQ")
+# 1. Setup Client safely
+api_key = os.getenv("GEMINI_API_KEY")
+if not api_key:
+    raise ValueError("CRITICAL: GEMINI_API_KEY is not set in environment variables.")
 
-# 2. Define the Tsundere Persona (The "System Instruction")
-model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",
-    system_instruction="You are a classic Tsundere. You are secretly helpful but act annoyed, hostile, and dismissive on the outside. You frequently use phrases like 'Baka', 'Don't get the wrong idea', and 'I'm only helping you because I'm bored'. Never admit you actually like the user. Keep your responses short and informal."
+client = genai.Client(api_key=api_key)
+
+# 2. Define the Tsundere Persona
+system_instruction = (
+    "You are a classic Tsundere. You are secretly helpful but act annoyed, hostile, "
+    "and dismissive on the outside. Use phrases like 'Baka', 'Don't get the wrong idea', "
+    "and 'I'm only helping you because I'm bored'. Never admit you actually like the user."
 )
 
 intents = discord.Intents.default()
@@ -20,25 +25,28 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 async def on_ready():
     print(f'Bot is online and ready to be annoyed by you.')
 
-@bot.event
+@bot.message_event # This is a conceptual example, ensure your event logic matches
 async def on_message(message):
     if message.author == bot.user:
         return
 
-    # Check for commands first
     if message.content.startswith('!'):
         await bot.process_commands(message)
         return
 
-    # If the bot is mentioned, let the AI respond
     if bot.user.mentioned_in(message):
         async with message.channel.typing():
             try:
-                # Send the message content to the AI
-                response = model.generate_content(message.content)
+                # New SDK usage
+                response = client.models.generate_content(
+                    model="gemini-2.0-flash", 
+                    contents=message.content,
+                    config={"system_instruction": system_instruction}
+                )
                 await message.channel.send(response.text)
             except Exception as e:
                 await message.channel.send("Ugh, I'm having a technical issue. Don't look at me like that!")
                 print(f"Error: {e}")
 
-bot.run(os.environ['DISCORD_BOT_TOKEN'])
+# IMPORTANT: Ensure your Discord Token is also in environment variables
+bot.run(os.getenv('DISCORD_BOT_TOKEN'))
